@@ -1,0 +1,8 @@
+token
+walk.log
+launchd.log
+INBOX.md
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties

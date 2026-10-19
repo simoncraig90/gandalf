@@ -16,6 +16,7 @@ import com.k2fsa.sherpa.onnx.*
 class WakeService : Service() {
     @Volatile private var listening = false
     private var thread: Thread? = null
+    @Volatile private var gen = 0
     private var conversation: Conversation? = null
 
     override fun onBind(i: Intent?): IBinder? = null
@@ -38,6 +39,7 @@ class WakeService : Service() {
     private fun startWake() {
         if (thread != null || !Prefs.wakeOn(this)) return
         listening = true
+        val myGen = ++gen
         thread = Thread({
             var kws: KeywordSpotter? = null
             var stream: OnlineStream? = null
@@ -53,7 +55,7 @@ class WakeService : Service() {
                 kws = KeywordSpotter(assets, cfg)
                 stream = kws.createStream("")
                 var failures = 0
-                while (listening) {
+                while (gen == myGen) {
                     var rec: AudioRecord? = null
                     try {
                         val n = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
@@ -62,7 +64,7 @@ class WakeService : Service() {
                         rec.startRecording()
                         if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) throw IllegalStateException("not recording")
                         val buf = ShortArray(1600)
-                        while (listening) {
+                        while (gen == myGen) {
                             val got = rec.read(buf, 0, buf.size)
                             if (got < 0) throw IllegalStateException("read returned $got")
                             if (got == 0) continue
@@ -71,7 +73,7 @@ class WakeService : Service() {
                             while (kws.isReady(stream)) kws.decode(stream)
                             if (kws.getResult(stream).keyword.isNotEmpty()) {
                                 kws.reset(stream)
-                                listening = false
+                                gen++ // this thread is done; converse() tears it down
                                 android.os.Handler(mainLooper).post { converse() }
                             }
                         }
@@ -81,7 +83,7 @@ class WakeService : Service() {
                     } finally {
                         try { rec?.stop(); rec?.release() } catch (_: Exception) {}
                     }
-                    if (listening) try { Thread.sleep(if (failures <= 10) 300 else 5000) } catch (_: InterruptedException) {}
+                    if (gen == myGen) try { Thread.sleep(if (failures <= 10) 300 else 5000) } catch (_: InterruptedException) {}
                 }
             } catch (e: Throwable) {
                 android.util.Log.e("Walk", "wake word failed", e)
@@ -93,7 +95,8 @@ class WakeService : Service() {
 
     private fun stopWake() {
         listening = false
-        try { thread?.join(1500) } catch (_: Exception) {}
+        gen++ // every running wake thread sees a stale generation and exits
+        thread?.interrupt()
         thread = null
     }
 

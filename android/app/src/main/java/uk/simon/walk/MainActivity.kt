@@ -65,6 +65,7 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33) required += Manifest.permission.POST_NOTIFICATIONS
         val missing = required.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
         if (missing.isEmpty()) { action(); return }
+        if (pending != null) return // a permission dialog is already in flight
         pending = action
         val ask = missing.toMutableList()
         if (checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED)
@@ -76,6 +77,14 @@ class MainActivity : Activity() {
         super.onRequestPermissionsResult(code, p, r)
         val a = pending; pending = null
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) (a ?: { applyWake() })()
+        else denied()
+    }
+
+    private var askedOnResume = false
+
+    private fun denied() {
+        wake.isChecked = false; save()
+        Toast.makeText(this, "Microphone permission is needed for the wake word.", Toast.LENGTH_LONG).show()
     }
 
     override fun onPause() { super.onPause(); save(); applyWake() }
@@ -95,7 +104,10 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (wake.isChecked) withMic { applyWake() }
+        if (!wake.isChecked || pending != null) return
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) applyWake()
+        else if (!askedOnResume) { askedOnResume = true; withMic { applyWake() } }
+        else denied()
     }
 
     companion object { const val EXTRA_START_LISTENING = "start_listening" }

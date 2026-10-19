@@ -22,8 +22,8 @@ class WakeService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel("walk", "Walk", NotificationManager.IMPORTANCE_LOW))
-        val n = Notification.Builder(this, "walk").setContentTitle("Walk: listening for hey Claude")
+        nm.createNotificationChannel(NotificationChannel("walk", "Gandalf", NotificationManager.IMPORTANCE_LOW))
+        val n = Notification.Builder(this, "walk").setContentTitle("Gandalf: listening")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now).setOngoing(true).build()
         startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
         if (intent?.action == ACTION_CONVERSE) converse() else if (conversation == null) startWake()
@@ -82,7 +82,7 @@ class WakeService : Service() {
 
     private fun converse() {
         if (conversation != null) return
-        stopWake() // Porcupine holds the mic
+        stopWake() // the wake-word recorder holds the mic
         val c = Conversation(this) {
             conversation = null
             if (Prefs.wakeOn(this)) startWake() else stopSelf()

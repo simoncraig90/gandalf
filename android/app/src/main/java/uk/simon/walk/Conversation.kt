@@ -89,17 +89,22 @@ class Conversation(private val ctx: Context, private val onFinished: () -> Unit)
     private fun listen() {
         if (finished) return
         if (!SpeechRecognizer.isRecognitionAvailable(ctx)) { fail("Speech recognition is not available."); return }
-        recognizer?.destroy()
-        val r = SpeechRecognizer.createSpeechRecognizer(ctx)
-        recognizer = r
+        // Reuse one recognizer per conversation: destroying and recreating it straight away races the shared Google
+        // service's shutdown and fails with ERROR_SERVER_DISCONNECTED (11).
+        val r = recognizer ?: SpeechRecognizer.createSpeechRecognizer(ctx).also { recognizer = it }
         r.setRecognitionListener(object : RecognitionListener {
             override fun onResults(results: Bundle?) {
                 val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
-                if (text.isEmpty()) noMatch() else { misses = 0; send(text) }
+                if (text.isEmpty()) noMatch() else { misses = 0; reconnects = 0; send(text) }
             }
             override fun onError(error: Int) {
                 if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) noMatch()
-                else fail("Speech recognition error $error.")
+                else if (error in RECONNECT && reconnects < 2) {
+                    // service went away under us: fresh recognizer after a short pause
+                    reconnects++
+                    recognizer?.destroy(); recognizer = null
+                    main.postDelayed({ listen() }, 700)
+                } else fail("Speech recognition error $error.")
             }
             override fun onReadyForSpeech(p: Bundle?) {}
             override fun onBeginningOfSpeech() {}
@@ -115,6 +120,10 @@ class Conversation(private val ctx: Context, private val onFinished: () -> Unit)
             putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, ctx.packageName)
         })
     }
+
+    private var reconnects = 0
+    private val RECONNECT = setOf(SpeechRecognizer.ERROR_SERVER_DISCONNECTED, SpeechRecognizer.ERROR_CLIENT,
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY, SpeechRecognizer.ERROR_SERVER)
 
     private fun noMatch() {
         misses++

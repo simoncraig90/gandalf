@@ -25,7 +25,11 @@ class WakeService : Service() {
         nm.createNotificationChannel(NotificationChannel("walk", "Gandalf", NotificationManager.IMPORTANCE_LOW))
         val n = Notification.Builder(this, "walk").setContentTitle("Gandalf: listening")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now).setOngoing(true).build()
-        startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        try {
+            startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE)
+        } catch (e: Exception) {
+            android.util.Log.e("Walk", "startForeground refused", e)
+        }
         if (intent?.action == ACTION_CONVERSE) converse() else if (conversation == null) startWake()
         return START_STICKY
     }
@@ -37,7 +41,6 @@ class WakeService : Service() {
         thread = Thread({
             var kws: KeywordSpotter? = null
             var stream: OnlineStream? = null
-            var rec: AudioRecord? = null
             try {
                 val d = "kws/"
                 val cfg = KeywordSpotterConfig(
@@ -49,26 +52,40 @@ class WakeService : Service() {
                     keywordsFile = d + "keywords.txt")
                 kws = KeywordSpotter(assets, cfg)
                 stream = kws.createStream("")
-                val n = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-                rec = AudioRecord(MediaRecorder.AudioSource.MIC, 16000, AudioFormat.CHANNEL_IN_MONO,
-                    AudioFormat.ENCODING_PCM_16BIT, maxOf(n, 6400))
-                rec.startRecording()
-                val buf = ShortArray(1600)
+                var failures = 0
                 while (listening) {
-                    val got = rec.read(buf, 0, buf.size)
-                    if (got <= 0) continue
-                    stream.acceptWaveform(FloatArray(got) { buf[it] / 32768f }, 16000)
-                    while (kws.isReady(stream)) kws.decode(stream)
-                    if (kws.getResult(stream).keyword.isNotEmpty()) {
-                        kws.reset(stream)
-                        listening = false
-                        android.os.Handler(mainLooper).post { converse() }
+                    var rec: AudioRecord? = null
+                    try {
+                        val n = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                        rec = AudioRecord(MediaRecorder.AudioSource.MIC, 16000, AudioFormat.CHANNEL_IN_MONO,
+                            AudioFormat.ENCODING_PCM_16BIT, maxOf(n, 6400))
+                        rec.startRecording()
+                        if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) throw IllegalStateException("not recording")
+                        val buf = ShortArray(1600)
+                        while (listening) {
+                            val got = rec.read(buf, 0, buf.size)
+                            if (got < 0) throw IllegalStateException("read returned $got")
+                            if (got == 0) continue
+                            failures = 0
+                            stream.acceptWaveform(FloatArray(got) { buf[it] / 32768f }, 16000)
+                            while (kws.isReady(stream)) kws.decode(stream)
+                            if (kws.getResult(stream).keyword.isNotEmpty()) {
+                                kws.reset(stream)
+                                listening = false
+                                android.os.Handler(mainLooper).post { converse() }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        failures++
+                        android.util.Log.e("Walk", "mic failed (attempt $failures)", e)
+                    } finally {
+                        try { rec?.stop(); rec?.release() } catch (_: Exception) {}
                     }
+                    if (listening) try { Thread.sleep(if (failures <= 10) 300 else 5000) } catch (_: InterruptedException) {}
                 }
             } catch (e: Throwable) {
                 android.util.Log.e("Walk", "wake word failed", e)
             } finally {
-                try { rec?.stop(); rec?.release() } catch (_: Exception) {}
                 try { stream?.release(); kws?.release() } catch (_: Throwable) {}
             }
         }, "wake").also { it.start() }
@@ -91,11 +108,21 @@ class WakeService : Service() {
         android.os.Handler(mainLooper).post { c.start() }
     }
 
+    override fun onCreate() { super.onCreate(); instance = this }
+
+    /** Called by the assistant session when it runs a conversation in-process: free the mic, then resume. */
+    fun pauseSpotter() { stopWake() }
+    fun resumeSpotter() { if (conversation == null) startWake() }
+
     override fun onDestroy() {
+        instance = null
         stopWake()
         conversation?.finish()
         super.onDestroy()
     }
 
-    companion object { const val ACTION_CONVERSE = "uk.simon.walk.CONVERSE" }
+    companion object {
+        const val ACTION_CONVERSE = "uk.simon.walk.CONVERSE"
+        @Volatile var instance: WakeService? = null
+    }
 }

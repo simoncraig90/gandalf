@@ -37,7 +37,6 @@ class Conversation(private val ctx: Context, private val onFinished: () -> Unit)
     private var pendingAfterTts: (() -> Unit)? = null
 
     fun start() {
-        try { ToneGenerator(AudioManager.STREAM_MUSIC, 80).startTone(ToneGenerator.TONE_PROP_BEEP, 150) } catch (_: Exception) {}
         tts = TextToSpeech(ctx) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
             if (ttsReady) {
@@ -51,16 +50,22 @@ class Conversation(private val ctx: Context, private val onFinished: () -> Unit)
                 })
             }
         }
-        openSco { listen() }
+        openSco {
+            // SCO first, then the beep, then ~150 ms of quiet before the recogniser opens the mic.
+            try { ToneGenerator(AudioManager.STREAM_MUSIC, 80).startTone(ToneGenerator.TONE_PROP_BEEP, 150) } catch (_: Exception) {}
+            main.postDelayed({ listen() }, 300)
+        }
     }
 
     /** Use the Bluetooth headset mic when one is connected; wait up to 2 s for SCO. */
     private fun openSco(then: () -> Unit) {
-        val headset = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any {
-            it.type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-        } || audio.isBluetoothScoAvailableOffCall && audio.getDevices(AudioManager.GET_DEVICES_INPUTS).any {
-            it.type == android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO
-        }
+        val btTypes = setOf(android.media.AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, android.media.AudioDeviceInfo.TYPE_BLUETOOTH_SCO)
+        var headset = audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.type in btTypes }
+        if (!headset) headset = try {
+            android.bluetooth.BluetoothAdapter.getDefaultAdapter()
+                ?.getProfileConnectionState(android.bluetooth.BluetoothProfile.HEADSET) ==
+                android.bluetooth.BluetoothProfile.STATE_CONNECTED
+        } catch (_: SecurityException) { false }
         if (!headset) { then(); return }
         var done = false
         val go = { if (!done) { done = true; main.post(then) } }
@@ -120,6 +125,7 @@ class Conversation(private val ctx: Context, private val onFinished: () -> Unit)
         val url = Prefs.serverUrl(ctx) + "/say"
         val token = Prefs.token(ctx)
         net.execute {
+            error = null
             var reply: String? = null
             var wav: File? = null
             var end = false
@@ -144,7 +150,7 @@ class Conversation(private val ctx: Context, private val onFinished: () -> Unit)
                         wav = f
                     } else reply = c.inputStream.bufferedReader().readText().trim()
                 }
-            } catch (e: Exception) { error = e.javaClass.simpleName }
+            } catch (e: Exception) { error = "net" }
             val t = reply; val w = wav
             main.post {
                 when {

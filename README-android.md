@@ -24,7 +24,7 @@ The model (int8) and sherpa-onnx 1.13.8 AAR (`app/libs`) are bundled; APK is arm
 ## First run
 Open Gandalf, fill in server URL (default http://100.98.119.35:8846) and token (contents of `~/walk/token`),
 tick "Wake word on", grant microphone/notification/Bluetooth permissions, accept the battery-exemption prompt.
-"Test conversation" runs one conversation without the wake word. The service restarts at boot while the switch is on.
+"Test conversation" runs one conversation without the wake word. After a reboot (switch on) a notification "Gandalf: tap to start listening" appears; tapping it opens the app, which starts the service. Android 14+ forbids starting a microphone service straight from BOOT_COMPLETED, so listening does not resume by itself until you tap.
 
 ## Set as assistant (earbud long-press / assist gesture)
 Press "Set as assistant" (Settings > Default digital assistant app), choose Walk. Long-press on the earbuds

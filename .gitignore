@@ -10,3 +10,4 @@ android/local.properties
 tts/*.onnx
 tts/*.bin
 samples/
+gandalf-debug.apk

@@ -1,6 +1,7 @@
 # Walk app (Android) — "hey Claude" wake word + earbud button, phone stays in pocket
 
 ## Current state
+- 19 Oct 2026 evening: BUILT and merged to main (sherpa-onnx wake word, Gandalf label, audio/wav replies). Two skeptic passes, all gaps fixed except: compiled only, NEVER run on a device. First device test: say "hey gandalf", then Test conversation with earbuds on. APK: ~/walk/gandalf-debug.apk (gitignored; rebuild with `cd android && ./gradlew assembleDebug`).
 - 19 Oct 2026: spec written; wake-word engine changed from Picovoice to sherpa-onnx keyword spotting (open source, no account) while the builder was mid-build. Mac side (server.py on 100.98.119.35:8846, header X-Token) is done and tested.
 
 ## Goal

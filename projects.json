@@ -5,21 +5,102 @@
   "session_idle_min": 30,
   "default_inbox_dir": "~/walk",
   "projects": [
-    {"name": "wrackline", "path": "~/wrackline", "handoff": "HANDOFF.md",
-     "aliases": ["rack line", "wreck line", "rackline", "the mmo"]},
-    {"name": "strangerhood", "path": "~/strangerhood-ops", "handoff": "HANDOFF-2026-10-07.md",
-     "aliases": ["stranger hood", "stranger good", "chat site", "omegle"]},
-    {"name": "strangerbot", "path": "~/strangerhood-ops/strangerbot", "handoff": "HANDOFF.md",
-     "aliases": ["stranger bot", "red team", "bot fleet", "detector"]},
-    {"name": "answer-intel", "path": "~/answer-intel", "handoff": "HANDOFF.md",
-     "aliases": ["answer intel", "answer intelligence", "seo"]},
-    {"name": "soma", "path": "~/soma-lab-scratch", "handoff": "HANDOFF.md",
-     "aliases": ["soma lab", "summer"]},
-    {"name": "companion", "path": "~/companion", "handoff": null,
-     "aliases": ["companion bot", "companion chatbot"]},
-    {"name": "evergrow", "path": "~/Evergrow", "handoff": null, "aliases": ["ever grow"]},
-    {"name": "mobile-game", "path": "~/mobile-game", "handoff": null, "aliases": ["mobile game"]},
-    {"name": "osrs-mmg", "path": "~/osrs-mmg", "handoff": null, "aliases": ["osrs", "runescape"]},
-    {"name": "selfhost-guides", "path": "~/selfhost-guides", "handoff": null, "aliases": ["self host", "selfhost"]}
-  ]
+    {
+      "name": "wrackline",
+      "path": "~/wrackline",
+      "handoff": "HANDOFF.md",
+      "aliases": [
+        "rack line",
+        "wreck line",
+        "rackline",
+        "the mmo"
+      ]
+    },
+    {
+      "name": "strangerhood",
+      "path": "~/strangerhood-ops",
+      "handoff": "HANDOFF-2026-10-07.md",
+      "aliases": [
+        "stranger hood",
+        "stranger good",
+        "chat site",
+        "omegle"
+      ]
+    },
+    {
+      "name": "strangerbot",
+      "path": "~/strangerhood-ops/strangerbot",
+      "handoff": "HANDOFF.md",
+      "aliases": [
+        "stranger bot",
+        "red team",
+        "bot fleet",
+        "detector"
+      ]
+    },
+    {
+      "name": "answer-intel",
+      "path": "~/answer-intel",
+      "handoff": "HANDOFF.md",
+      "aliases": [
+        "answer intel",
+        "answer intelligence",
+        "seo"
+      ]
+    },
+    {
+      "name": "soma",
+      "path": "~/soma-lab-scratch",
+      "handoff": "HANDOFF.md",
+      "aliases": [
+        "soma lab",
+        "summer"
+      ]
+    },
+    {
+      "name": "companion",
+      "path": "~/companion",
+      "handoff": null,
+      "aliases": [
+        "companion bot",
+        "companion chatbot"
+      ]
+    },
+    {
+      "name": "evergrow",
+      "path": "~/Evergrow",
+      "handoff": null,
+      "aliases": [
+        "ever grow"
+      ]
+    },
+    {
+      "name": "mobile-game",
+      "path": "~/mobile-game",
+      "handoff": null,
+      "aliases": [
+        "mobile game"
+      ]
+    },
+    {
+      "name": "osrs-mmg",
+      "path": "~/osrs-mmg",
+      "handoff": null,
+      "aliases": [
+        "osrs",
+        "runescape"
+      ]
+    },
+    {
+      "name": "selfhost-guides",
+      "path": "~/selfhost-guides",
+      "handoff": null,
+      "aliases": [
+        "self host",
+        "selfhost"
+      ]
+    }
+  ],
+  "voice": "bm_george",
+  "voice_speed": 0.9
 }

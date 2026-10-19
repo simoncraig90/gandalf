@@ -4,7 +4,7 @@
   <key>Label</key><string>com.simon.walk</string>
   <key>ProgramArguments</key><array>
     <string>/usr/bin/caffeinate</string><string>-s</string>
-    <string>/usr/bin/python3</string><string>/Users/simon/walk/server.py</string>
+    <string>/Users/simon/walk/.venv/bin/python</string><string>/Users/simon/walk/server.py</string>
   </array>
   <key>EnvironmentVariables</key><dict>
     <key>PATH</key><string>/Users/simon/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>

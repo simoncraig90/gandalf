@@ -3,6 +3,11 @@
 Notes that start with note/idea/remember/save and name a project are filed straight into that
 project's INBOX.md without a model call. Everything else goes to Claude Code with project context."""
 import datetime, json, os, re, subprocess, threading, time, uuid
+try:
+    import tts  # Gandalf voice (Kokoro); optional
+except Exception as e:  # noqa
+    tts = None
+    print("tts unavailable:", e)
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -112,11 +117,13 @@ class H(BaseHTTPRequestHandler):
     def log_message(self, *a):
         pass
 
-    def _send(self, code, body):
+    def _send(self, code, body, end=False):
         data = body.encode()
         self.send_response(code)
         self.send_header("Content-Type", "text/plain; charset=utf-8")
         self.send_header("Content-Length", str(len(data)))
+        if end:
+            self.send_header("X-End", "1")
         self.end_headers()
         self.wfile.write(data)
 
@@ -130,11 +137,31 @@ class H(BaseHTTPRequestHandler):
         text = self.rfile.read(n).decode("utf-8", "replace")
         t0 = time.time()
         reply = handle(text)
-        log(f"{time.time()-t0:5.1f}s  Q: {text[:120]!r}  A: {reply[:160]!r}")
-        self._send(200, reply)
+        end = reply.startswith("Bye")
+        want_audio = "audio/wav" in self.headers.get("Accept", "")
+        wav = None
+        if want_audio and tts:
+            try:
+                wav = tts.wav_bytes(reply, CFG.get("voice", "bm_george"), CFG.get("voice_speed", 0.9))
+            except Exception as e:  # noqa
+                log(f"tts error: {e}")
+        log(f"{time.time()-t0:5.1f}s {'wav' if wav else 'txt'}  Q: {text[:120]!r}  A: {reply[:160]!r}")
+        if wav:
+            self.send_response(200)
+            self.send_header("Content-Type", "audio/wav")
+            self.send_header("Content-Length", str(len(wav)))
+            self.send_header("X-Text", reply.encode("ascii", "ignore").decode()[:200].replace("\n", " "))
+            if end:
+                self.send_header("X-End", "1")
+            self.end_headers()
+            self.wfile.write(wav)
+        else:
+            self._send(200, reply, end)
 
 
 if __name__ == "__main__":
+    if tts:
+        threading.Thread(target=tts.engine, daemon=True).start()  # warm the voice
     srv = ThreadingHTTPServer((CFG["bind"], CFG["port"]), H)
     log(f"listening on {CFG['bind']}:{CFG['port']}")
     srv.serve_forever()

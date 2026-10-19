@@ -6,3 +6,7 @@ android/.gradle/
 android/build/
 android/app/build/
 android/local.properties
+.venv/
+tts/*.onnx
+tts/*.bin
+samples/

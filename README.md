@@ -52,8 +52,8 @@ Android gives no app a free custom wake word; only Google's "Hey Google" is alwa
    Google Assistant integration) with the phrase "hey Claude". Then "Hey Google, hey Claude" starts the conversation
    hands-free. The earbud long-press then goes to Google too, so "hey Claude" after the press works the same way.
    Unknown: whether Gemini still honours Tasker phrases on this phone (older Assistant did). A one-minute test decides.
-2. True "hey Claude" with no "Hey Google" first: an always-listening wake-word engine on the phone. Picovoice Porcupine
-   trains a custom "hey Claude" model (free for personal use) and runs on-device, light on battery. No Tasker plugin to vouch
-   for, so this is a small Android app (foreground service + Porcupine + one HTTP call to the Mac, or a Tasker intent).
-   About a day's build on the Windows PC's Android toolchain. Not started; decision pending.
+2. True "hey Claude" with no "Hey Google" first: an always-listening wake-word engine on the phone, open source and
+   on-device: sherpa-onnx keyword spotting (Apache-2.0), keywords written as text, no account. This is the Walk app in
+   android/ (spec: android-SPEC.md), which also replaces Tasker: it can be the default assistant app, forces the Bluetooth
+   voice link for the earbud mic, and runs the whole conversation itself. Chosen 19 Oct.
    Not recommended: AutoVoice "Continuous" mode (battery-heavy, unreliable outdoors).

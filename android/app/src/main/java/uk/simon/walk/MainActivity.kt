@@ -13,7 +13,6 @@ import android.view.View
 import android.widget.*
 
 class MainActivity : Activity() {
-    private lateinit var key: EditText
     private lateinit var url: EditText
     private lateinit var token: EditText
     private lateinit var wake: Switch
@@ -30,7 +29,6 @@ class MainActivity : Activity() {
                 col.addView(this)
             }
         }
-        key = field("Picovoice AccessKey", Prefs.accessKey(this), true)
         url = field("Server URL", Prefs.serverUrl(this))
         token = field("Token", Prefs.token(this), true)
         wake = Switch(this).apply { text = "Wake word on"; isChecked = Prefs.wakeOn(this@MainActivity); col.addView(this) }
@@ -44,7 +42,7 @@ class MainActivity : Activity() {
         setContentView(ScrollView(this).apply { addView(col) })
     }
 
-    private fun save() = Prefs.save(this, key.text.toString(), url.text.toString(), token.text.toString(), wake.isChecked)
+    private fun save() = Prefs.save(this, url.text.toString(), token.text.toString(), wake.isChecked)
 
     private fun startSvc(i: Intent) = try { startForegroundService(i) } catch (e: Exception) {
         Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()

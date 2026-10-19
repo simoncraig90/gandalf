@@ -7,14 +7,13 @@ object Prefs {
     const val DEFAULT_URL = "http://100.98.119.35:8846"
     private fun sp(c: Context) = c.getSharedPreferences("walk", Context.MODE_PRIVATE)
 
-    fun accessKey(c: Context) = sp(c).getString("accessKey", "") ?: ""
     fun serverUrl(c: Context) = sp(c).getString("serverUrl", DEFAULT_URL) ?: DEFAULT_URL
     fun token(c: Context) = sp(c).getString("token", "") ?: ""
     fun wakeOn(c: Context) = sp(c).getBoolean("wakeOn", false)
     fun batteryAsked(c: Context) = sp(c).getBoolean("batteryAsked", false)
 
-    fun save(c: Context, key: String, url: String, token: String, wake: Boolean) {
-        sp(c).edit().putString("accessKey", key.trim()).putString("serverUrl", url.trim().trimEnd('/'))
+    fun save(c: Context, url: String, token: String, wake: Boolean) {
+        sp(c).edit().putString("serverUrl", url.trim().trimEnd('/'))
             .putString("token", token.trim()).putBoolean("wakeOn", wake).apply()
     }
 

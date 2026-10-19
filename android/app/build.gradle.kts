@@ -12,13 +12,15 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        ndk { abiFilters += listOf("arm64-v8a") }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    androidResources { noCompress += listOf("onnx") }
     kotlinOptions { jvmTarget = "17" }
 }
 dependencies {
-    implementation("ai.picovoice:porcupine-android:3.0.3")
+    implementation(files("libs/sherpa-onnx-1.13.8.aar"))
 }

@@ -7,13 +7,15 @@ import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
-import ai.picovoice.porcupine.Porcupine
-import ai.picovoice.porcupine.PorcupineManager
-import java.io.File
+import android.media.AudioFormat
+import android.media.AudioRecord
+import android.media.MediaRecorder
+import com.k2fsa.sherpa.onnx.*
 
-/** Foreground (microphone) service: Porcupine wake word, and host of the conversation loop. */
+/** Foreground (microphone) service: sherpa-onnx keyword spotting, and host of the conversation loop. */
 class WakeService : Service() {
-    private var porcupine: PorcupineManager? = null
+    @Volatile private var listening = false
+    private var thread: Thread? = null
     private var conversation: Conversation? = null
 
     override fun onBind(i: Intent?): IBinder? = null
@@ -28,29 +30,54 @@ class WakeService : Service() {
         return START_STICKY
     }
 
+    /** Open-source on-device wake word: sherpa-onnx KeywordSpotter over 16 kHz mono AudioRecord. */
     private fun startWake() {
-        if (porcupine != null || !Prefs.wakeOn(this)) return
-        val key = Prefs.accessKey(this)
-        if (key.isEmpty()) return
-        try {
-            val b = PorcupineManager.Builder().setAccessKey(key)
-            if (assets.list("")?.contains("hey_claude_android.ppn") == true) {
-                val f = File(filesDir, "hey_claude_android.ppn")
-                assets.open("hey_claude_android.ppn").use { i -> f.outputStream().use { o -> i.copyTo(o) } }
-                b.setKeywordPath(f.absolutePath)
-            } else {
-                b.setKeyword(Porcupine.BuiltInKeyword.COMPUTER)
+        if (thread != null || !Prefs.wakeOn(this)) return
+        listening = true
+        thread = Thread({
+            var kws: KeywordSpotter? = null
+            var stream: OnlineStream? = null
+            var rec: AudioRecord? = null
+            try {
+                val d = "kws/"
+                val cfg = KeywordSpotterConfig(
+                    featConfig = FeatureConfig(sampleRate = 16000, featureDim = 80),
+                    modelConfig = OnlineModelConfig(
+                        transducer = OnlineTransducerModelConfig(
+                            encoder = d + "encoder.int8.onnx", decoder = d + "decoder.int8.onnx", joiner = d + "joiner.int8.onnx"),
+                        tokens = d + "tokens.txt", numThreads = 1, modelType = "zipformer2"),
+                    keywordsFile = d + "keywords.txt")
+                kws = KeywordSpotter(assets, cfg)
+                stream = kws.createStream("")
+                val n = AudioRecord.getMinBufferSize(16000, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
+                rec = AudioRecord(MediaRecorder.AudioSource.MIC, 16000, AudioFormat.CHANNEL_IN_MONO,
+                    AudioFormat.ENCODING_PCM_16BIT, maxOf(n, 6400))
+                rec.startRecording()
+                val buf = ShortArray(1600)
+                while (listening) {
+                    val got = rec.read(buf, 0, buf.size)
+                    if (got <= 0) continue
+                    stream.acceptWaveform(FloatArray(got) { buf[it] / 32768f }, 16000)
+                    while (kws.isReady(stream)) kws.decode(stream)
+                    if (kws.getResult(stream).keyword.isNotEmpty()) {
+                        kws.reset(stream)
+                        listening = false
+                        android.os.Handler(mainLooper).post { converse() }
+                    }
+                }
+            } catch (e: Throwable) {
+                android.util.Log.e("Walk", "wake word failed", e)
+            } finally {
+                try { rec?.stop(); rec?.release() } catch (_: Exception) {}
+                try { stream?.release(); kws?.release() } catch (_: Throwable) {}
             }
-            porcupine = b.build(this) { converse() }
-            porcupine?.start()
-        } catch (e: Exception) {
-            porcupine = null
-        }
+        }, "wake").also { it.start() }
     }
 
     private fun stopWake() {
-        try { porcupine?.stop(); porcupine?.delete() } catch (_: Exception) {}
-        porcupine = null
+        listening = false
+        try { thread?.join(1500) } catch (_: Exception) {}
+        thread = null
     }
 
     private fun converse() {

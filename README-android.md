@@ -1,6 +1,6 @@
 # Walk app (Android)
 
-Wake word "hey Claude" (Picovoice Porcupine) or the assistant gesture / earbud long-press starts a spoken
+Wake word "hey Gandalf" / "hey Claude" (sherpa-onnx) or the assistant gesture / earbud long-press starts a spoken
 conversation with `server.py` (POST text/plain to `<server>/say`, header `X-Token`; a reply starting "Bye" ends it).
 
 ## Build
@@ -11,14 +11,18 @@ APK: `android/app/build/outputs/apk/debug/app-debug.apk`. `android/local.propert
 ## Install
 `adb install -r app-debug.apk`, or copy the APK to the phone and open it. Install Tailscale on the phone first.
 
-## Picovoice
-1. Sign up free at console.picovoice.ai, copy the AccessKey, paste it in the app.
-2. Without a keyword file the built-in word "computer" is used, so you can test right away.
-3. To get "hey Claude": in the console train a Porcupine wake word "hey Claude" for Android, download the `.ppn`,
-   save it as `android/app/src/main/assets/hey_claude_android.ppn`, rebuild, reinstall.
+## Wake word
+Open source (sherpa-onnx keyword spotting, Apache-2.0), on-device, no account, no AccessKey. Phrases: "hey gandalf",
+"gandalf", "hey claude", "hi claude", "hello claude". To change them, edit `android/app/src/main/assets/kws/keywords.txt`
+and rebuild. Each line is BPE tokens, boost, threshold, phrase, e.g. `▁HE Y ▁GA ND AL F :2.0 #0.25 @hey gandalf`.
+Generate the token part with `pip install sherpa-onnx click pypinyin sentencepiece` then
+`sherpa-onnx-cli text2token --tokens tokens.txt --tokens-type bpe --bpe-model bpe.model in.txt out.txt`
+(tokens.txt and bpe.model come from the sherpa-onnx-kws-zipformer-gigaspeech-3.3M-2024-01-01 release; bpe.model is not shipped in the app).
+The phrase must be made of words the model's vocabulary can spell; raise the boost (:2.0) if it misses, lower it if it false-triggers.
+The model (int8) and sherpa-onnx 1.13.8 AAR (`app/libs`) are bundled; APK is arm64-v8a only.
 
 ## First run
-Open Walk, fill in AccessKey, server URL (default http://100.98.119.35:8846) and token (contents of `~/walk/token`),
+Open Gandalf, fill in server URL (default http://100.98.119.35:8846) and token (contents of `~/walk/token`),
 tick "Wake word on", grant microphone/notification/Bluetooth permissions, accept the battery-exemption prompt.
 "Test conversation" runs one conversation without the wake word. The service restarts at boot while the switch is on.
 

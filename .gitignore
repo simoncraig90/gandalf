@@ -11,3 +11,4 @@ tts/*.onnx
 tts/*.bin
 samples/
 gandalf-debug.apk
+__pycache__/

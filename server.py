@@ -128,6 +128,17 @@ class H(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
+        if self.path == "/apk":  # the phone downloads the app from here over Tailscale
+            apk = os.path.join(HERE, "gandalf-debug.apk")
+            if not os.path.exists(apk):
+                return self._send(404, "no apk built")
+            data = open(apk, "rb").read()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/vnd.android.package-archive")
+            self.send_header("Content-Disposition", "attachment; filename=gandalf.apk")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            return self.wfile.write(data)
         self._send(200, "walk ok")
 
     def do_POST(self):

@@ -52,6 +52,18 @@
         </service>
 
         <service
+            android:name=".StubRecognitionService"
+            android:exported="true"
+            android:permission="android.permission.RECORD_AUDIO">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.speech"
+                android:resource="@xml/recognition_service" />
+        </service>
+
+        <service
             android:name=".WalkSessionService"
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />

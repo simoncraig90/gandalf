@@ -13,7 +13,7 @@ APK: `android/app/build/outputs/apk/debug/app-debug.apk`. `android/local.propert
 
 ## Wake word
 Open source (sherpa-onnx keyword spotting, Apache-2.0), on-device, no account, no AccessKey. Phrases: "hey gandalf",
-"gandalf", "hey claude", "hi claude", "hello claude". To change them, edit `android/app/src/main/assets/kws/keywords.txt`
+"gandalf", "hey claude", "hi claude", "hello claude". To change them, edit `android/app/src/main/assets/kws/keywords.txt (the `@name` at the end must contain no spaces, e.g. `@hey_gandalf`, or the engine aborts at startup)`
 and rebuild. Each line is BPE tokens, boost, threshold, phrase, e.g. `▁HE Y ▁GA ND AL F :2.0 #0.25 @hey gandalf`.
 Generate the token part with `pip install sherpa-onnx click pypinyin sentencepiece` then
 `sherpa-onnx-cli text2token --tokens tokens.txt --tokens-type bpe --bpe-model bpe.model in.txt out.txt`

@@ -142,6 +142,13 @@ class H(BaseHTTPRequestHandler):
         self._send(200, "walk ok")
 
     def do_POST(self):
+        if self.path == "/crash":  # crash reports from the phone app (no token: the app may crash before it is set)
+            n = int(self.headers.get("Content-Length") or 0)
+            body = self.rfile.read(min(n, 65536)).decode("utf-8", "replace")
+            with open(os.path.join(HERE, "crash.log"), "a") as f:
+                f.write(f"\n===== {datetime.datetime.now():%Y-%m-%d %H:%M:%S} from {self.client_address[0]}\n{body}\n")
+            log(f"crash report received ({n} bytes)")
+            return self._send(200, "logged")
         if self.headers.get("X-Token") != TOKEN:
             return self._send(403, "no")
         n = int(self.headers.get("Content-Length") or 0)

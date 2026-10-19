@@ -31,4 +31,4 @@ Press "Set as assistant" (Settings > Default digital assistant app), choose Walk
 should now start the conversation; if it plays/pauses instead, set the earbud's own app to "voice assistant".
 
 ## Not verified
-Built only; never run on a device. Bluetooth SCO mic routing, the assistant session, and Porcupine start-up are untested.
+Server replies: audio/wav (played directly, X-End: 1 ends) or text/plain (Android TTS). Built only; never run on a device. Bluetooth SCO mic routing, the assistant session, and Porcupine start-up are untested.

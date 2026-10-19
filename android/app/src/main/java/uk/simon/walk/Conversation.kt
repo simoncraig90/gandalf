@@ -13,6 +13,8 @@ import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import android.media.MediaPlayer
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -118,24 +120,54 @@ class Conversation(private val ctx: Context, private val onFinished: () -> Unit)
         val url = Prefs.serverUrl(ctx) + "/say"
         val token = Prefs.token(ctx)
         net.execute {
-            val reply: String? = try {
+            var reply: String? = null
+            var wav: File? = null
+            var end = false
+            try {
                 val c = URL(url).openConnection() as HttpURLConnection
                 c.requestMethod = "POST"
                 c.connectTimeout = 10000
                 c.readTimeout = 100000
                 c.doOutput = true
                 c.setRequestProperty("Content-Type", "text/plain; charset=utf-8")
+                c.setRequestProperty("Accept", "audio/wav")
                 c.setRequestProperty("X-Token", token)
                 c.outputStream.use { it.write(text.toByteArray()) }
                 val code = c.responseCode
-                if (code == 200) c.inputStream.bufferedReader().readText().trim()
-                else { error = "HTTP $code"; null }
-            } catch (e: Exception) { error = e.javaClass.simpleName; null }
+                if (code != 200) error = "HTTP $code"
+                else {
+                    end = c.getHeaderField("X-End") == "1"
+                    val type = c.contentType.orEmpty().lowercase()
+                    if (type.startsWith("audio/")) {
+                        val f = File(ctx.cacheDir, "reply.wav")
+                        c.inputStream.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
+                        wav = f
+                    } else reply = c.inputStream.bufferedReader().readText().trim()
+                }
+            } catch (e: Exception) { error = e.javaClass.simpleName }
+            val t = reply; val w = wav
             main.post {
-                if (reply == null) fail("Network error: ${error ?: "unknown"}.")
-                else speak(reply) { if (reply.startsWith("Bye", true)) finish() else listen() }
+                when {
+                    w != null -> play(w) { if (end) finish() else listen() }
+                    t != null -> speak(t) { if (end || t.startsWith("Bye", true)) finish() else listen() }
+                    else -> fail("Network error: ${error ?: "unknown"}.")
+                }
             }
         }
+    }
+
+    /** Play a WAV reply (Gandalf voice) on the MUSIC stream; [after] runs when it completes or fails. */
+    private fun play(f: File, after: () -> Unit) {
+        try {
+            val mp = MediaPlayer()
+            mp.setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build())
+            mp.setDataSource(f.absolutePath)
+            mp.setOnCompletionListener { it.release(); after() }
+            mp.setOnErrorListener { p, _, _ -> p.release(); after(); true }
+            mp.prepare()
+            mp.start()
+        } catch (e: Exception) { after() }
     }
 
     @Volatile private var error: String? = null

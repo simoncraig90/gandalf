@@ -17,7 +17,8 @@ LOG = os.path.join(HERE, "walk.log")
 IDLE = CFG.get("session_idle_min", 30) * 60
 state = {"sid": None, "last": 0.0, "lock": threading.Lock()}
 NOTE_RE = re.compile(r"^\s*(?:note|idea|remember|save)\b[:,]?\s*(.+)$", re.I | re.S)
-END_RE = re.compile(r"^\s*(done|stop|that'?s all|bye|goodbye|thanks,? bye)[.!]?\s*$", re.I)
+END_RE = re.compile(r"^\s*(done|stop|that'?s all|that'?s it|bye|goodbye|thanks,? bye|stop listening|go away|be quiet|enough)[.!]?\s*$", re.I)
+END_MARK = "[END]"  # Gandalf appends this when Simon wants to stop (see prompt.md)
 
 
 def log(msg):
@@ -88,28 +89,30 @@ def ask(text):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=120, cwd=HERE, env=env)
     except subprocess.TimeoutExpired:
-        return "Sorry, that took too long. Ask again."
+        return "Sorry, that took too long. Ask again.", False
     if r.returncode != 0:
         log(f"claude rc={r.returncode} err={r.stderr.strip()[:300]}")
         with state["lock"]:
             state["sid"] = None
-        return "Sorry, I hit an error. Try once more."
-    return speakable(r.stdout)
+        return "Sorry, I hit an error. Try once more.", False
+    out = r.stdout
+    end = END_MARK in out
+    return speakable(out.replace(END_MARK, "")), end
 
 
 def handle(text):
     text = text.strip()
     if not text:
-        return "I didn't catch that."
+        return "I didn't catch that.", False
     if END_RE.match(text):
         with state["lock"]:
             state["sid"] = None
-        return "Bye. Enjoy the walk."
+        return "Bye. Enjoy the walk.", True
     m = NOTE_RE.match(text)
     p = match_project(text)
     if m and p:
         append_note(p, m.group(1))
-        return f"Saved to the {p['name']} inbox."
+        return f"Saved to the {p['name']} inbox.", False
     return ask(text)
 
 
@@ -154,8 +157,7 @@ class H(BaseHTTPRequestHandler):
         n = int(self.headers.get("Content-Length") or 0)
         text = self.rfile.read(n).decode("utf-8", "replace")
         t0 = time.time()
-        reply = handle(text)
-        end = reply.startswith("Bye")
+        reply, end = handle(text)
         want_audio = "audio/wav" in self.headers.get("Accept", "")
         wav = None
         if want_audio and tts:

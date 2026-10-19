@@ -64,11 +64,21 @@ class WakeService : Service() {
                         rec.startRecording()
                         if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) throw IllegalStateException("not recording")
                         val buf = ShortArray(1600)
+                        var reads = 0; var peak = 0.0
                         while (gen == myGen) {
                             val got = rec.read(buf, 0, buf.size)
                             if (got < 0) throw IllegalStateException("read returned $got")
                             if (got == 0) continue
                             failures = 0
+                            // diagnostics: loudest 100 ms block every 5 s, and whether Android is silencing us
+                            var sum = 0.0; for (i in 0 until got) sum += buf[i].toDouble() * buf[i]
+                            peak = maxOf(peak, Math.sqrt(sum / got))
+                            if (++reads % 50 == 0) {
+                                val silenced = if (android.os.Build.VERSION.SDK_INT >= 29)
+                                    rec.activeRecordingConfiguration?.isClientSilenced else null
+                                android.util.Log.i("Walk", "wake level peak=${peak.toInt()} silenced=$silenced")
+                                peak = 0.0
+                            }
                             stream.acceptWaveform(FloatArray(got) { buf[it] / 32768f }, 16000)
                             while (kws.isReady(stream)) kws.decode(stream)
                             if (kws.getResult(stream).keyword.isNotEmpty()) {

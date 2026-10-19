@@ -33,6 +33,7 @@ class Conversation(private val ctx: Context, private val onFinished: () -> Unit)
     private var recognizer: SpeechRecognizer? = null
     private var scoOn = false
     private var misses = 0
+    private var answered = false
     private var finished = false
     private var pendingAfterTts: (() -> Unit)? = null
 
@@ -95,7 +96,7 @@ class Conversation(private val ctx: Context, private val onFinished: () -> Unit)
         r.setRecognitionListener(object : RecognitionListener {
             override fun onResults(results: Bundle?) {
                 val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull()?.trim().orEmpty()
-                if (text.isEmpty()) noMatch() else { misses = 0; reconnects = 0; send(text) }
+                if (text.isEmpty()) noMatch() else { misses = 0; reconnects = 0; answered = true; send(text) }
             }
             override fun onError(error: Int) {
                 if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) noMatch()
@@ -127,7 +128,8 @@ class Conversation(private val ctx: Context, private val onFinished: () -> Unit)
 
     private fun noMatch() {
         misses++
-        if (misses >= 2) finish() else listen()
+        // after the first exchange, one silent turn ends it; before it, allow one retry
+        if (misses >= (if (answered) 1 else 2)) finish() else listen()
     }
 
     private fun send(text: String) {

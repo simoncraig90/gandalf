@@ -12,3 +12,6 @@ tts/*.bin
 samples/
 gandalf-debug.apk
 __pycache__/
+wakeword/real/
+wakeword/data/
+wakeword/out/

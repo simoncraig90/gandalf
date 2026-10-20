@@ -64,7 +64,9 @@ class WakeService : Service() {
                         rec.startRecording()
                         if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) throw IllegalStateException("not recording")
                         val buf = ShortArray(1600)
-                        var reads = 0; var peak = 0.0
+                        var reads = 0; var peak = 0.0; var active = 0
+                        var floor = 100.0; var quiet = HANG + 1
+                        val preroll = ArrayDeque<FloatArray>()
                         while (gen == myGen) {
                             val got = rec.read(buf, 0, buf.size)
                             if (got < 0) throw IllegalStateException("read returned $got")
@@ -72,14 +74,31 @@ class WakeService : Service() {
                             failures = 0
                             // diagnostics: loudest 100 ms block every 5 s, and whether Android is silencing us
                             var sum = 0.0; for (i in 0 until got) sum += buf[i].toDouble() * buf[i]
-                            peak = maxOf(peak, Math.sqrt(sum / got))
+                            val rms = Math.sqrt(sum / got)
+                            peak = maxOf(peak, rms)
+                            clips.feed(buf, got, rms)
                             if (++reads % 50 == 0) {
                                 val silenced = if (android.os.Build.VERSION.SDK_INT >= 29)
                                     rec.activeRecordingConfiguration?.isClientSilenced else null
-                                android.util.Log.i("Walk", "wake level peak=${peak.toInt()} silenced=$silenced")
-                                peak = 0.0
+                                android.util.Log.i("Walk", "wake level peak=${peak.toInt()} floor=${floor.toInt()} active=$active/50 silenced=$silenced")
+                                peak = 0.0; active = 0
                             }
-                            stream.acceptWaveform(FloatArray(got) { buf[it] / 32768f }, 16000)
+                            // Silence skip (battery): the model only runs while there is sound above the room's
+                            // noise floor, plus 0.5 s of pre-roll so the start of "hey" is not lost.
+                            val block = FloatArray(got) { buf[it] / 32768f }
+                            val loud = rms > maxOf(floor * 2.5, 150.0)
+                            if (!loud && quiet >= 0) floor = floor * 0.98 + rms * 0.02
+                            if (loud) {
+                                if (quiet >= HANG) for (b in preroll) stream.acceptWaveform(b, 16000)
+                                preroll.clear(); quiet = 0
+                            } else if (quiet < HANG) quiet++
+                            else {
+                                if (quiet == HANG) { kws.reset(stream); quiet++ }
+                                preroll.addLast(block); if (preroll.size > 5) preroll.removeFirst()
+                                continue
+                            }
+                            active++
+                            stream.acceptWaveform(block, 16000)
                             while (kws.isReady(stream)) kws.decode(stream)
                             if (kws.getResult(stream).keyword.isNotEmpty()) {
                                 kws.reset(stream)
@@ -101,6 +120,33 @@ class WakeService : Service() {
                 try { stream?.release(); kws?.release() } catch (_: Throwable) {}
             }
         }, "wake").also { it.start() }
+    }
+
+    /** DEBUG (20 Oct, wake-word tuning): keeps the last 4 s of wake audio; 2 s after speech starts, saves it to
+     *  files/clips/clip_NN.wav (max 40). Pull with adb run-as. Remove once the thresholds are tuned. */
+    private val clips = ClipSaver()
+    private inner class ClipSaver {
+        val ring = ShortArray(16000 * 4); var pos = 0; var countdown = -1; var quietUntil = 0L; var n = 0
+        fun feed(b: ShortArray, got: Int, rms: Double) {
+            for (i in 0 until got) { ring[pos] = b[i]; pos = (pos + 1) % ring.size }
+            val now = System.currentTimeMillis()
+            if (countdown < 0 && rms > 800 && now > quietUntil) countdown = 20
+            if (countdown > 0 && --countdown == 0) { countdown = -1; quietUntil = now + 2000; save() }
+        }
+        fun save() {
+            if (n >= 40) return
+            val dir = java.io.File(filesDir, "clips").apply { mkdirs() }
+            val data = ShortArray(ring.size) { ring[(pos + it) % ring.size] }
+            val f = java.io.File(dir, "clip_%02d.wav".format(n++))
+            java.io.DataOutputStream(java.io.BufferedOutputStream(java.io.FileOutputStream(f))).use { o ->
+                fun i32(v: Int) { o.write(v and 255); o.write(v shr 8 and 255); o.write(v shr 16 and 255); o.write(v shr 24 and 255) }
+                fun i16(v: Int) { o.write(v and 255); o.write(v shr 8 and 255) }
+                o.writeBytes("RIFF"); i32(36 + data.size * 2); o.writeBytes("WAVEfmt "); i32(16); i16(1); i16(1)
+                i32(16000); i32(32000); i16(2); i16(16); o.writeBytes("data"); i32(data.size * 2)
+                for (v in data) i16(v.toInt())
+            }
+            android.util.Log.i("Walk", "saved ${f.name}")
+        }
     }
 
     private fun stopWake() {
@@ -136,6 +182,7 @@ class WakeService : Service() {
 
     companion object {
         const val ACTION_CONVERSE = "uk.simon.walk.CONVERSE"
+        const val HANG = 15 // 1.5 s of quiet before the model stops
         @Volatile var instance: WakeService? = null
     }
 }

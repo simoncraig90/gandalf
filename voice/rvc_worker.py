@@ -24,7 +24,7 @@ def convert(req):
     vc.convert_audio(audio_input_path=req["src"], audio_output_path=req["out"], model_path=PTH,
                      index_path=IDX if os.path.exists(IDX) else "",
                      pitch=int(req.get("pitch", os.environ.get("WALK_RVC_PITCH", 0))), f0_method="rmvpe",
-                     index_rate=float(req.get("index_rate", os.environ.get("WALK_RVC_INDEX_RATE", 0.5))),
+                     index_rate=float(req.get("index_rate", os.environ.get("WALK_RVC_INDEX_RATE", 0.8))),
                      protect=float(req.get("protect", 0.33)), volume_envelope=1.0, embedder_model="contentvec",
                      export_format="WAV")
 

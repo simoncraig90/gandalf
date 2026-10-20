@@ -9,6 +9,8 @@ from kokoro_onnx import Kokoro
 HERE = os.path.dirname(os.path.abspath(__file__))
 VOICE_PY = os.path.join(HERE, "voice/.venv/bin/python")
 RVC_PY = os.path.join(HERE, "voice/work/rvc/.venv/bin/python")
+# semitone shift to land each Kokoro voice in McKellen's speaking range (median F0 ~108 Hz)
+RVC_PITCH = {"bm_george": -4, "bm_daniel": -2, "bm_lewis": 2, "bm_fable": 0}
 WORKERS = {"main": (VOICE_PY, "voice/worker.py"), "rvc": (RVC_PY, "voice/rvc_worker.py")}
 _k = None
 def engine():
@@ -61,6 +63,7 @@ def clone_wav(eng, text, voice, speed, timeout):
             if eng == "rvc": voice = c.get("rvc_base_voice", voice)
             src = os.path.join(d, "src.wav"); open(src, "wb").write(kokoro_wav(text, voice, speed)); req["src"] = src
             if eng == "rvc":
+                req["pitch"] = RVC_PITCH.get(voice, 0)
                 for k in ("pitch", "index_rate", "protect"):
                     if "rvc_" + k in c: req[k] = c["rvc_" + k]
         _call(req, timeout)

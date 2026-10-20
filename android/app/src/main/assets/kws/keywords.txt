@@ -1,5 +1,0 @@
-▁HE Y ▁C LA U DE :2.0 #0.25 @hey_claude
-▁HI ▁C LA U DE :2.0 #0.25 @hi_claude
-▁HE LL O ▁C LA U DE :2.0 #0.25 @hello_claude
-▁HE Y ▁GA ND AL F :2.0 #0.25 @hey_gandalf
-▁GA ND AL F :2.0 #0.25 @gandalf

@@ -10,9 +10,8 @@ import android.os.IBinder
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import com.k2fsa.sherpa.onnx.*
 
-/** Foreground (microphone) service: sherpa-onnx keyword spotting, and host of the conversation loop. */
+/** Foreground (microphone) service: openWakeWord (ONNX Runtime) wake-word spotting, and host of the conversation loop. */
 class WakeService : Service() {
     @Volatile private var listening = false
     private var thread: Thread? = null
@@ -35,25 +34,16 @@ class WakeService : Service() {
         return START_STICKY
     }
 
-    /** Open-source on-device wake word: sherpa-onnx KeywordSpotter over 16 kHz mono AudioRecord. */
+    /** Open-source on-device wake word: openWakeWord "hey gandalf" over 16 kHz mono AudioRecord. */
     private fun startWake() {
         if (thread != null || !Prefs.wakeOn(this)) return
         listening = true
         val myGen = ++gen
         thread = Thread({
-            var kws: KeywordSpotter? = null
-            var stream: OnlineStream? = null
+            var det: OwwDetector? = null
             try {
-                val d = "kws/"
-                val cfg = KeywordSpotterConfig(
-                    featConfig = FeatureConfig(sampleRate = 16000, featureDim = 80),
-                    modelConfig = OnlineModelConfig(
-                        transducer = OnlineTransducerModelConfig(
-                            encoder = d + "encoder.int8.onnx", decoder = d + "decoder.int8.onnx", joiner = d + "joiner.int8.onnx"),
-                        tokens = d + "tokens.txt", numThreads = 1, modelType = "zipformer2"),
-                    keywordsFile = d + "keywords.txt")
-                kws = KeywordSpotter(assets, cfg)
-                stream = kws.createStream("")
+                det = OwwDetector(this)
+                selfTest(det)
                 var failures = 0
                 while (gen == myGen) {
                     var rec: AudioRecord? = null
@@ -64,7 +54,7 @@ class WakeService : Service() {
                         rec.startRecording()
                         if (rec.recordingState != AudioRecord.RECORDSTATE_RECORDING) throw IllegalStateException("not recording")
                         val buf = ShortArray(1600)
-                        var reads = 0; var peak = 0.0; var active = 0
+                        var reads = 0; var peak = 0.0; var active = 0; var maxScore = 0f; var hits = 0
                         var floor = 100.0; var quiet = HANG + 1
                         val preroll = ArrayDeque<FloatArray>()
                         while (gen == myGen) {
@@ -80,28 +70,32 @@ class WakeService : Service() {
                             if (++reads % 50 == 0) {
                                 val silenced = if (android.os.Build.VERSION.SDK_INT >= 29)
                                     rec.activeRecordingConfiguration?.isClientSilenced else null
-                                android.util.Log.i("Walk", "wake level peak=${peak.toInt()} floor=${floor.toInt()} active=$active/50 silenced=$silenced")
-                                peak = 0.0; active = 0
+                                android.util.Log.i("Walk", "wake level peak=${peak.toInt()} floor=${floor.toInt()} active=$active/50 score=${"%.2f".format(maxScore)} silenced=$silenced")
+                                peak = 0.0; active = 0; maxScore = 0f
                             }
                             // Silence skip (battery): the model only runs while there is sound above the room's
                             // noise floor, plus 0.5 s of pre-roll so the start of "hey" is not lost.
-                            val block = FloatArray(got) { buf[it] / 32768f }
+                            val block = FloatArray(got) { buf[it].toFloat() }
                             val loud = rms > maxOf(floor * 2.5, 150.0)
                             if (!loud && quiet >= 0) floor = floor * 0.98 + rms * 0.02
                             if (loud) {
-                                if (quiet >= HANG) for (b in preroll) stream.acceptWaveform(b, 16000)
+                                if (quiet >= HANG) for (b in preroll) det.feed(b, 0, b.size)
                                 preroll.clear(); quiet = 0
                             } else if (quiet < HANG) quiet++
                             else {
-                                if (quiet == HANG) { kws.reset(stream); quiet++ }
+                                if (quiet == HANG) { det.reset(); hits = 0; quiet++ }
                                 preroll.addLast(block); if (preroll.size > 5) preroll.removeFirst()
                                 continue
                             }
                             active++
-                            stream.acceptWaveform(block, 16000)
-                            while (kws.isReady(stream)) kws.decode(stream)
-                            if (kws.getResult(stream).keyword.isNotEmpty()) {
-                                kws.reset(stream)
+                            val sc = det.feed(block, 0, got)
+                            if (sc >= 0f) {
+                                maxScore = maxOf(maxScore, sc)
+                                hits = if (sc >= OwwDetector.THRESHOLD) hits + 1 else 0
+                            }
+                            if (hits >= OwwDetector.PATIENCE) {
+                                android.util.Log.i("Walk", "wake word score=${"%.2f".format(sc)}")
+                                det.reset(); hits = 0
                                 gen++ // this thread is done; converse() tears it down
                                 android.os.Handler(mainLooper).post { converse() }
                             }
@@ -117,9 +111,23 @@ class WakeService : Service() {
             } catch (e: Throwable) {
                 android.util.Log.e("Walk", "wake word failed", e)
             } finally {
-                try { stream?.release(); kws?.release() } catch (_: Throwable) {}
+                det?.close()
             }
         }, "wake").also { it.start() }
+    }
+
+    /** DEBUG: if files/selftest.wav (16 kHz mono 16-bit) exists, runs it through the detector with the live 100 ms
+     *  framing and logs the per-chunk scores, so the on-device pipeline can be checked against the Mac. */
+    private fun selfTest(det: OwwDetector) {
+        val f = java.io.File(filesDir, "selftest.wav"); if (!f.exists()) return
+        try {
+            val b = f.readBytes(); val n = (b.size - 44) / 2
+            val x = FloatArray(n) { ((b[44 + 2 * it].toInt() and 255) or (b[45 + 2 * it].toInt() shl 8)).toShort().toFloat() }
+            det.reset(); val sb = StringBuilder(); var top = 0f
+            var i = 0; while (i < n) { val k = minOf(1600, n - i); val s = det.feed(x, i, k); if (s >= 0f) { sb.append("%.2f ".format(s)); top = maxOf(top, s) }; i += k }
+            android.util.Log.i("Walk", "selftest top=${"%.3f".format(top)} scores: $sb")
+            det.reset()
+        } catch (e: Exception) { android.util.Log.e("Walk", "selftest failed", e) }
     }
 
     /** DEBUG (20 Oct, wake-word tuning): keeps the last 4 s of wake audio; 2 s after speech starts, saves it to

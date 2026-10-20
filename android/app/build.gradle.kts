@@ -22,5 +22,5 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 dependencies {
-    implementation(files("libs/sherpa-onnx-1.13.8.aar"))
+    implementation("com.microsoft.onnxruntime:onnxruntime-android:1.22.0")
 }

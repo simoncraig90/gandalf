@@ -42,3 +42,7 @@ replace sherpa-onnx in the app with it. Open source only, no cloud APIs, no Pico
    Playing a Kokoro "hey gandalf" WAV through the Mac speaker is not available, so phone-side detection is
    verified by Simon; you verify offline with the same ONNX models and the same 80 ms framing.
 3. A short `wakeword/README.md`: how to retrain, how to add Simon's real clips as positives later, threshold location.
+
+## Status 20 Oct (builder): NOT DONE - criterion 1 failed
+Cause (evidence): synthetic-only positives; recall on synthetic test 47% at 8 FP/h, or 24% at 0.5 FP/h (maxneg 1500); clip_03 max score 0.001 / 0.32 / 0.056 across 3 trainings.
+Pipeline, app port, on-device parity (selftest 0.056 = Mac 0.056) proven. Next: real positives from the phone (ClipSaver), see wakeword/README.md.

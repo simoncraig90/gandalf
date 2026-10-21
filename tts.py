@@ -43,17 +43,33 @@ def _kill(kind):
         try: w.kill()
         except Exception: pass
 def _call(req, timeout):
-    """One request to the worker; raises on error/timeout (and drops the worker so the next call restarts it)."""
+    """One request to the worker; raises on error/timeout (and drops the worker so the next call restarts it).
+    The deadline covers waiting for the lock, starting the worker and the reply, so nothing blocks forever."""
     kind = "rvc" if req["engine"] == "rvc" else "main"
-    with _lock:
-        w = _worker(kind); w.stdin.write(json.dumps(req) + "\n"); w.stdin.flush()
+    if not _lock.acquire(timeout=min(timeout, 15)): raise TimeoutError("voice worker busy")
+    try:
         done = threading.Event(); res = []
-        def rd(): res.append(w.stdout.readline()); done.set()
-        threading.Thread(target=rd, daemon=True).start()
+        def run():
+            try:
+                w = _worker(kind); w.stdin.write(json.dumps(req) + "\n"); w.stdin.flush()
+                res.append(w.stdout.readline())
+            except Exception as e: res.append(e)
+            done.set()
+        threading.Thread(target=run, daemon=True).start()
         if not done.wait(timeout): _kill(kind); raise TimeoutError(f"{req['engine']} > {timeout}s")
+        if isinstance(res[0], Exception): _kill(kind); raise res[0]
         r = json.loads(res[0] or "{}")
         if not r.get("ok"): raise RuntimeError(r.get("err", "worker died"))
         return r
+    finally:
+        _lock.release()
+
+def warm():
+    """Load Kokoro, and the clone worker if one is configured, so the first reply is not a cold start."""
+    engine(); c = cfg(); eng = c.get("voice_engine", "kokoro")
+    if eng in ("openvoice", "chatterbox", "rvc"):
+        try: clone_wav(eng, "Ready.", c.get("voice", "bm_george"), 0.9, 300); print(f"tts {eng} warm", file=sys.stderr, flush=True)
+        except Exception as e: print(f"tts {eng} warm failed: {e!r}", file=sys.stderr, flush=True)
 
 def clone_wav(eng, text, voice, speed, timeout):
     c = cfg()

@@ -181,7 +181,7 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     if tts:
-        threading.Thread(target=tts.engine, daemon=True).start()  # warm the voice
+        threading.Thread(target=tts.warm, daemon=True).start()  # warm the voice
     srv = ThreadingHTTPServer((CFG["bind"], CFG["port"]), H)
     log(f"listening on {CFG['bind']}:{CFG['port']}")
     srv.serve_forever()

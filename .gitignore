@@ -20,3 +20,5 @@ voice/samples/
 voice/.venv/
 voice/work/
 voice/worker.log
+voice/data/
+voice/models/

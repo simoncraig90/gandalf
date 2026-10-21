@@ -2,6 +2,7 @@
   "bind": "0.0.0.0",
   "port": 8846,
   "model": "sonnet",
+  "voice_engine": "kokoro",
   "session_idle_min": 30,
   "default_inbox_dir": "~/walk",
   "projects": [
